@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Game Gabungan Padil</title>
+  <style>
+    * { box-sizing: border-box; }
+    body, html { margin:0; padding:0; font-family: sans-serif; background:#f5f5f5; height:100vh; overflow:hidden; }
+    .screen { display: none; width:100%; height:100%; position:absolute; top:0; left:0; justify-content:center; align-items:center; }
+    .active { display:flex; }
+    .menu { flex-direction:column; text-align:center; }
+    .menu button { margin:0.5rem; padding:1rem 2rem; font-size:1.1rem; border:none; border-radius:8px; background:#007bff; color:#fff; cursor:pointer; }
+    /* Tebak Angka */
+    #guessScreen { flex-direction:column; background:#a2d5f2; }
+    #guessContainer { background:white; padding:2rem; border-radius:20px; box-shadow:0 4px 20px rgba(0,0,0,0.1); width:90%; max-width:400px; text-align:center; }
+    #guessContainer input, #guessContainer button { width:100%; padding:1rem; margin-top:0.5rem; font-size:1.2rem; border-radius:10px; border:1px solid #ccc; }
+    #guessContainer button { border:none; background:#28a745; color:#fff; cursor:pointer; }
+    #guessMessage { margin-top:1rem; min-height:2rem; font-size:1.1rem; }
+    /* Runner Game */
+    #runnerScreen { background: linear-gradient(to top, #4a90e2 70%, #6f4e37); }
+    canvas { display:block; }
+    #overlay, #scoreboard { position:absolute; width:100%; text-align:center; color:white; text-shadow:1px 1px 2px black; z-index:2; }
+    #overlay { top:10px; font-size:1.2rem; pointer-events:none; }
+    #scoreboard { top:40px; font-size:1.5rem; font-weight:bold; }
+    #menuRunner, #gameOverRunner { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:3; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff; }
+    #menuRunner input, #menuRunner button, #gameOverRunner button { padding:10px; margin:5px; font-size:1rem; border:none; border-radius:8px; }
+    #skinSelector, #leaderboard { position:absolute; z-index:2; background:rgba(0,0,0,0.3); color:#fff; padding:10px; border-radius:8px; font-size:1rem; }
+    #skinSelector { top:80px; left:10px; text-align:left; }
+    #leaderboard { top:150px; left:30px; }
+  </style>
+</head>
+<body>
+  <!-- Main Menu -->
+  <div id="mainMenu" class="screen active menu">
+    <h2>Pilih Game</h2>
+    <button onclick="showScreen('guessScreen')">Tebak Angka</button>
+    <button onclick="showScreen('runnerScreen')">Game Parkour</button>
+  </div>
+
+  <!-- Tebak Angka Screen -->
+  <div id="guessScreen" class="screen">
+    <div id="guessContainer">
+      <h2>Tebak Angka (1-100)</h2>
+      <input type="number" id="guessInput" placeholder="Masukkan tebakan Anda" />
+      <button onclick="checkGuess()">Tebak!</button>
+      <div id="guessMessage"></div>
+      <button style="background:#dc3545; margin-top:1rem;" onclick="showScreen('mainMenu')">Kembali ke Menu</button>
+    </div>
+  </div>
+
+  <!-- Runner Game Screen -->
+  <div id="runnerScreen" class="screen">
+    <canvas id="gameCanvas"></canvas>
+    <div id="overlay">Ketuk layar untuk lompat</div>
+    <div id="scoreboard">Skor: 0 | Skor Tertinggi: 0</div>
+    <div id="menuRunner">
+      <h2>Game Parkour</h2>
+      <input type="text" id="playerName" placeholder="Masukkan nama" />
+      <button onclick="startRunner()">Mulai</button>
+      <button style="background:#dc3545; margin-top:1rem;" onclick="showScreen('mainMenu')">Kembali ke Menu</button>
+    </div>
+    <div id="skinSelector">
+      <label>Pilih Warna:</label>
+      <select id="skin" onchange="changeSkin()">
+        <option value="#6F4E37">COKELAT</option>
+        <option value="#FF5733">MERAH</option>
+        <option value="#4287f5">BIRU</option>
+        <option value="#28a745">HIJAU</option>
+        <option value="#000000">HITAM</option>
+      </select><br>
+      <label>Custom Skin:</label>
+      <input type="file" accept="image/*" onchange="uploadSkin(event)">
+    </div>
+    <div id="leaderboard">
+      <h4>Leaderboard</h4>
+      <ol id="leaderboardList"></ol>
+    </div>
+    <div id="gameOverRunner" style="display:none;">
+      <div id="finalScore">Skor: 0</div>
+      <button onclick="restartRunner()">Main Lagi</button>
+      <button style="background:#dc3545; margin-top:1rem;" onclick="showScreen('mainMenu')">Kembali ke Menu</button>
+    </div>
+  </div>
+
+  <script>
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // --- Tebak Angka ---
+    let targetNumber;
+    const guessMessage = document.getElementById('guessMessage');
+    function initGuess() {
+      targetNumber = Math.floor(Math.random() * 100) + 1;
+      guessMessage.textContent = '';
+      document.getElementById('guessInput').value = '';
+    }
+    function checkGuess() {
+      const val = Number(document.getElementById('guessInput').value);
+      if (!val || val < 1 || val > 100) { guessMessage.textContent = 'Masukkan angka 1-100.'; return; }
+      if (val === targetNumber) guessMessage.textContent = 'Benar! Selamat!';
+      else if (val < targetNumber) guessMessage.textContent = 'Terlalu rendah.';
+      else guessMessage.textContent = 'Terlalu tinggi.';
+    }
+    document.getElementById('guessScreen').addEventListener('transitionend', () => {
+      if (document.getElementById('guessScreen').classList.contains('active')) initGuess();
+    });
+
+    // --- Runner Game ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let score = 0, highScore = parseInt(localStorage.getItem('highScore')) || 0;
+    let player, obstacles = [], lastTime = 0;
+    const gravity = 1.2, interval = 1500, speed = 6;
+    let gameState = 'menu', playerSkin = { type: 'color', value: '#6F4E37' };
+
+    class Player {
+      constructor(x, y, w, h, color, jumpHeight) {
+        this.x = x; this.y = y; this.w = w; this.h = h;
+        this.color = color; this.jumpHeight = jumpHeight;
+        this.dy = 0; this.isJumping = false; this.skinImage = null;
+      }
+      jump() {
+        if (!this.isJumping && gameState === 'playing') {
+          this.dy = this.jumpHeight;
+          this.isJumping = true;
+        }
+      }
+      update() {
+        this.dy += gravity; this.y += this.dy;
+        if (this.y + this.h > height) {
+          this.y = height - this.h;
+          this.dy = 0;
+          this.isJumping = false;
+        }
+      }
+      draw() {
+        ctx.save();
+        ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+        ctx.scale(1, this.dy < 0 ? 0.9 : 1.05);
+        if (this.skinImage) {
+          ctx.drawImage(this.skinImage, -this.w / 2, -this.h / 2, this.w, this.h);
+        } else {
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.roundRect(-this.w / 2, -this.h / 2, this.w, this.h, 10);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    class Obstacle {
+      constructor(x, y, w, h, color) {
+        this.x = x; this.y = y; this.w = w; this.h = h; this.color = color;
+      }
+      update() { this.x -= speed; }
+      draw() { ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.w, this.h); }
+      offscreen() { return this.x + this.w < 0; }
+      collides(player) {
+        return this.x < player.x + player.w &&
+               this.x + this.w > player.x &&
+               this.y < player.y + player.h &&
+               this.y + this.h > player.y;
+      }
+    }
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      if (player) player.y = height - player.h;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function startRunner() {
+      const name = document.getElementById('playerName').value.trim();
+      if (!name) return alert('Masukkan nama!');
+      document.getElementById('menuRunner').style.display = 'none';
+      gameState = 'playing'; score = 0; obstacles = []; lastTime = 0;
+      player = new Player(80, height - 50, 50, 50, playerSkin.value, -20);
+      if (playerSkin.type === 'image') player.skinImage = playerSkin.value;
+      updateScore();
+      document.getElementById('gameOverRunner').style.display = 'none';
+      fetchLeaderboard();
+      requestAnimationFrame(loop);
+    }
+
+    function updateScore() {
+      document.getElementById('scoreboard').innerText = `Skor: ${score} | Skor Tertinggi: ${highScore}`;
+    }
+
+    function showGameOver() {
+      gameState = 'over';
+      document.getElementById('finalScore').innerText = `Skor: ${score}`;
+      if (score > highScore) {
+        highScore = score; localStorage.setItem('highScore', highScore);
+      }
+      saveLeaderboard(score);
+      fetchLeaderboard();
+      document.getElementById('gameOverRunner').style.display = 'flex';
+      document.getElementById('leaderboard').style.display = 'block';
+    }
+
+    function restartRunner() {
+      document.getElementById('menuRunner').style.display = 'flex';
+      showScreen('runnerScreen');
+    }
+
+    function loop(ts) {
+      if (gameState !== 'playing') return;
+      if (!lastTime) lastTime = ts;
+      const delta = ts - lastTime;
+      if (delta > interval) {
+        const h = 50 + Math.random() * 50;
+        obstacles.push(new Obstacle(width, height - h, 40, h, '#222'));
+        lastTime = ts;
+      }
+      player.update();
+      obstacles.forEach((o, i) => {
+        o.update();
+        if (o.offscreen()) { obstacles.splice(i, 1); score++; updateScore(); }
+        else if (o.collides(player)) { showGameOver(); }
+      });
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      player.draw();
+      obstacles.forEach(o => o.draw());
+    }
+
+    document.addEventListener('touchstart', () => { if (player) player.jump(); }, { passive: true });
+    document.addEventListener('mousedown', () => { if (player) player.jump(); });
+
+    function changeSkin() {
+      const c = document.getElementById('skin').value;
+      playerSkin = { type: 'color', value: c };
+      if (player) { player.color = c; player.skinImage = null; }
+    }
+
+    function uploadSkin(e) {
+      const f = e.target.files[0];
+      if (f && f.type.startsWith('image/')) {
+        const r = new FileReader();
+        r.onload = ev => {
+          const img = new Image(); img.src = ev.target.result;
+          img.onload = () => { playerSkin = { type: 'image', value: img }; if (player) player.skinImage = img; };
+        };
+        r.readAsDataURL(f);
+      }
+    }
+
+    function saveLeaderboard(sc) {
+      const data = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+      data.push({ name: document.getElementById('playerName').value, score: sc });
+      data.sort((a, b) => b.score - a.score);
+      localStorage.setItem('leaderboard', JSON.stringify(data.slice(0, 5)));
+    }
+
+    function fetchLeaderboard() {
+      const list = document.getElementById('leaderboardList');
+      const data = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+      list.innerHTML = '';
+      data.forEach((d, i) => {
+        const li = document.createElement('li');
+        li.textContent = `${i + 1}. ${d.name} - ${d.score}`;
+        list.appendChild(li);
+      });
+    }
+  </script>
+</body>
+</html>
